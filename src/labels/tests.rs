@@ -32,9 +32,10 @@ fn unknown_dockguard_labels_are_collected() {
     .unwrap();
     assert_eq!(cl.unknown_labels.len(), 2);
     assert!(cl.unknown_labels.contains(&"dockguard.foo".to_string()));
-    assert!(cl
-        .unknown_labels
-        .contains(&"dockguard.unknown-thing".to_string()));
+    assert!(
+        cl.unknown_labels
+            .contains(&"dockguard.unknown-thing".to_string())
+    );
 }
 
 #[test]

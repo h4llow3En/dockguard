@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::path::Path;
 
 /// Attempts to detect the full container ID of the current process when running inside Docker.
@@ -12,10 +14,10 @@ pub fn detect_own_container_id() -> Option<String> {
         return None;
     }
 
-    if let Ok(cgroup) = std::fs::read_to_string("/proc/self/cgroup") {
-        if let Some(id) = extract_from_cgroup(&cgroup) {
-            return Some(id);
-        }
+    if let Ok(cgroup) = std::fs::read_to_string("/proc/self/cgroup")
+        && let Some(id) = extract_from_cgroup(&cgroup)
+    {
+        return Some(id);
     }
 
     // Fallback: Docker sets HOSTNAME to the container's short ID by default.
@@ -54,12 +56,11 @@ pub(crate) fn parse_container_id_from_path(path: &str) -> Option<String> {
     }
 
     // cgroup v2: docker-<id>.scope somewhere in the path
-    if let Some(after_prefix) = path.split_once("docker-").map(|(_, r)| r) {
-        if let Some(id) = after_prefix.split_once(".scope").map(|(id, _)| id) {
-            if looks_like_container_id(id) {
-                return Some(id.to_string());
-            }
-        }
+    if let Some(after_prefix) = path.split_once("docker-").map(|(_, r)| r)
+        && let Some(id) = after_prefix.split_once(".scope").map(|(id, _)| id)
+        && looks_like_container_id(id)
+    {
+        return Some(id.to_string());
     }
 
     None

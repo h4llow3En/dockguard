@@ -17,9 +17,7 @@ fn cgroup_v1_with_subpath() {
 
 #[test]
 fn cgroup_v2_scope() {
-    let id = parse_container_id_from_path(&format!(
-        "/system.slice/docker-{SHORT_ID}.scope"
-    ));
+    let id = parse_container_id_from_path(&format!("/system.slice/docker-{SHORT_ID}.scope"));
     assert_eq!(id.unwrap(), SHORT_ID);
 }
 
