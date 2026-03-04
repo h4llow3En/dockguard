@@ -5,6 +5,7 @@ fn base_config() -> Config {
         clean: false,
         host: None,
         enable: true,
+        self_update: false,
         log_level: "info".to_string(),
         pull_timeout: 300,
         once: false,

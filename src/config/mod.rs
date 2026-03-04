@@ -30,6 +30,11 @@ pub struct Config {
     #[arg(long, env = "GUARD_PULL_TIMEOUT", default_value_t = 300)]
     pub pull_timeout: u64,
 
+    /// Also update dockguard's own container when running inside Docker.
+    /// Has no effect when dockguard is not running in a container.
+    #[arg(long, env = "GUARD_SELF_UPDATE", default_value_t = false)]
+    pub self_update: bool,
+
     /// Run once and exit instead of running as a daemon
     #[arg(long, default_value_t = false)]
     pub once: bool,
@@ -41,6 +46,7 @@ pub struct ValidatedConfig {
     pub clean: bool,
     pub host: Option<String>,
     pub enable: bool,
+    pub self_update: bool,
     pub log_level: String,
     pub pull_timeout: u64,
     pub once: bool,
@@ -66,6 +72,7 @@ impl Config {
             clean: self.clean,
             host: self.host,
             enable: self.enable,
+            self_update: self.self_update,
             log_level: self.log_level,
             pull_timeout: self.pull_timeout,
             once: self.once,

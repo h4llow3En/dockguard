@@ -1,5 +1,6 @@
 mod config;
 mod labels;
+mod self_container;
 
 use anyhow::{Context, Result};
 use bollard::Docker;
