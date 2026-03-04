@@ -1,0 +1,16 @@
+[package]
+name = "dockguard"
+description = "A Docker container update watcher"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[[bin]]
+name = "dockguard"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+bollard = { version = "0.20.1", features = ["ssl"] }
+tokio = { version = "1.50", features = ["full"]}
+clap = { version = "4.5", features = ["derive", "env"] }
