@@ -4,6 +4,9 @@ description = "A Docker container update watcher"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
+repository = "https://github.com/h4llow3En/dockguard"
+keywords = ["docker", "containers", "watcher", "updater"]
+categories = ["command-line-utilities"]
 
 [[bin]]
 name = "dockguard"
