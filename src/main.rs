@@ -1,4 +1,5 @@
 mod config;
+mod labels;
 
 use anyhow::{Context, Result};
 use bollard::Docker;
