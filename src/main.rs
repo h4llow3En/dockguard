@@ -2,7 +2,7 @@ mod config;
 
 use anyhow::{Context, Result};
 use bollard::Docker;
-use clap::Parser;
+use clap::Parser as _;
 use config::Config;
 
 #[tokio::main]
@@ -13,7 +13,10 @@ async fn main() -> Result<()> {
         .version()
         .await
         .context("Docker daemon not reachable - is the socket mounted?")?;
-    println!("Connected to Docker daemon successfully. Version: {}", docker.version().await?.version.unwrap());
+    println!(
+        "Connected to Docker daemon successfully. Version: {}",
+        docker.version().await?.version.unwrap()
+    );
     Ok(())
 }
 

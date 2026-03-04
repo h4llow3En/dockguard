@@ -1,6 +1,7 @@
-use anyhow::{bail, ensure, Result};
+use anyhow::{Result, bail, ensure};
 use clap::Parser;
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum UpdateTrigger {
     Interval(u64),
@@ -8,7 +9,11 @@ pub enum UpdateTrigger {
 }
 
 #[derive(Parser, Debug)]
-#[command(name = "dockguard", version, about = "A Docker container update watcher")]
+#[command(
+    name = "dockguard",
+    version,
+    about = "A Docker container update watcher"
+)]
 pub struct Config {
     /// Remove old images after updating a container
     #[arg(long, env = "GUARD_CLEAN", default_value_t = false)]
@@ -20,12 +25,22 @@ pub struct Config {
     pub host: Option<String>,
 
     /// Cron expression for the update schedule (mutually exclusive with --intervall)
-    #[arg(short = 's', long, env = "GUARD_SCHEDULE", conflicts_with = "intervall")]
+    #[arg(
+        short = 's',
+        long,
+        env = "GUARD_SCHEDULE",
+        conflicts_with = "intervall"
+    )]
     pub schedule: Option<String>,
 
     /// Interval in seconds between update checks (mutually exclusive with --schedule).
     /// Default: 86400 (24 hours)
-    #[arg(short = 'i', long, env = "GUARD_INTERVALL", conflicts_with = "schedule")]
+    #[arg(
+        short = 'i',
+        long,
+        env = "GUARD_INTERVALL",
+        conflicts_with = "schedule"
+    )]
     pub intervall: Option<u64>,
 
     /// Only watch for updates and log them without actually performing updates
@@ -49,6 +64,7 @@ pub struct Config {
     pub once: bool,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct ValidatedConfig {
     pub clean: bool,
@@ -67,9 +83,9 @@ impl Config {
             (Some(cron), None) => UpdateTrigger::Schedule(cron),
             (None, Some(secs)) => UpdateTrigger::Interval(secs),
             (None, None) => UpdateTrigger::Interval(86400),
-            (Some(_), Some(_)) => bail!(
-                "Only one of --schedule and --intervall may be set at the same time"
-            ),
+            (Some(_), Some(_)) => {
+                bail!("Only one of --schedule and --intervall may be set at the same time")
+            }
         };
 
         if let UpdateTrigger::Schedule(ref expr) = update_trigger {
@@ -82,8 +98,14 @@ impl Config {
             );
         }
 
-        ensure!(self.pull_timeout > 0, "--pull-timeout must be greater than 0");
-        ensure!(self.stop_timeout > 0, "--stop-timeout must be greater than 0");
+        ensure!(
+            self.pull_timeout > 0,
+            "--pull-timeout must be greater than 0"
+        );
+        ensure!(
+            self.stop_timeout > 0,
+            "--stop-timeout must be greater than 0"
+        );
 
         if let Some(ref host) = self.host {
             let valid_schemes = ["unix://", "tcp://", "http://", "https://"];

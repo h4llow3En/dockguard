@@ -22,7 +22,12 @@ fn default_trigger_is_interval_86400() {
 
 #[test]
 fn explicit_intervall_is_used() {
-    let cfg = Config { intervall: Some(3600), ..base_config() }.validate().unwrap();
+    let cfg = Config {
+        intervall: Some(3600),
+        ..base_config()
+    }
+    .validate()
+    .unwrap();
     assert!(matches!(cfg.update_trigger, UpdateTrigger::Interval(3600)));
 }
 
@@ -58,7 +63,10 @@ fn invalid_cron_returns_error() {
 
 #[test]
 fn zero_pull_timeout_returns_error() {
-    let cfg = Config { pull_timeout: 0, ..base_config() };
+    let cfg = Config {
+        pull_timeout: 0,
+        ..base_config()
+    };
     assert!(cfg.validate().is_err());
 }
 
@@ -73,7 +81,11 @@ fn invalid_host_scheme_returns_error() {
 
 #[test]
 fn valid_host_scheme_passes() {
-    for scheme in ["unix:///var/run/docker.sock", "tcp://host:2375", "https://host:2376"] {
+    for scheme in [
+        "unix:///var/run/docker.sock",
+        "tcp://host:2375",
+        "https://host:2376",
+    ] {
         let cfg = Config {
             host: Some(scheme.to_string()),
             ..base_config()
