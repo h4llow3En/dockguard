@@ -32,7 +32,7 @@ pub struct Config {
 
     /// Also update dockguard's own container when running inside Docker.
     /// Has no effect when dockguard is not running in a container.
-    #[arg(long, env = "GUARD_SELF_UPDATE", default_value_t = false)]
+    #[arg(env = "GUARD_SELF_UPDATE", default_value_t = false)]
     pub self_update: bool,
 
     /// Run once and exit instead of running as a daemon
