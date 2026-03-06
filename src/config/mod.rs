@@ -55,10 +55,12 @@ impl Config {
             "--pull-timeout must be greater than 0"
         );
 
-        let log_level = self
-            .log_level
-            .parse::<Level>()
-            .with_context(|| format!("Invalid log level '{}': expected one of trace, debug, info, warn, error", self.log_level))?;
+        let log_level = self.log_level.parse::<Level>().with_context(|| {
+            format!(
+                "Invalid log level '{}': expected one of trace, debug, info, warn, error",
+                self.log_level
+            )
+        })?;
 
         let self_update = std::env::var("GUARD_SELF_UPDATE")
             .map(|v| matches!(v.to_lowercase().as_str(), "true" | "1" | "yes"))

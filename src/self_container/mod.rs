@@ -1,6 +1,7 @@
-#![allow(dead_code)]
-
 use std::path::Path;
+
+use bollard::Docker;
+use bollard::models::ContainerInspectResponse;
 
 /// Attempts to detect the full container ID of the current process when running inside Docker.
 /// Returns `None` if dockguard is not running in a container or if detection fails.
@@ -69,6 +70,24 @@ pub(crate) fn parse_container_id_from_path(path: &str) -> Option<String> {
 /// A string looks like a Docker container ID if it is at least 12 hex characters.
 fn looks_like_container_id(s: &str) -> bool {
     s.len() >= 12 && s.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// Resolves dockguard's own container via the Docker API.
+///
+/// Returns `None` if dockguard is not running inside Docker, or if the
+/// container cannot be found (e.g. the socket is not mounted with the
+/// container's own ID visible). Inspect errors are logged as warnings so
+/// that a misconfigured self-update never crashes the daemon.
+pub async fn resolve_own_container(docker: &Docker) -> Option<ContainerInspectResponse> {
+    let id = detect_own_container_id()?;
+
+    match docker.inspect_container(&id, None).await {
+        Ok(info) => Some(info),
+        Err(e) => {
+            tracing::warn!("Could not inspect own container (id={id}): {e}");
+            None
+        }
+    }
 }
 
 #[cfg(test)]

@@ -38,6 +38,26 @@ async fn run(cfg: ValidatedConfig) -> Result<()> {
 
     let version = docker.version().await?.version.unwrap_or_default();
     tracing::info!("Connected to Docker daemon (version {version})");
+
+    if cfg.self_update {
+        match self_container::resolve_own_container(&docker).await {
+            Some(info) => {
+                let name = info.name.as_deref().unwrap_or("<unknown>");
+                let image = info
+                    .config
+                    .as_ref()
+                    .and_then(|c| c.image.as_deref())
+                    .unwrap_or("<unknown>");
+                tracing::info!("Self-update enabled — own container: {name} (image: {image})");
+            }
+            None => {
+                tracing::warn!(
+                    "Self-update enabled but dockguard does not appear to be running inside Docker — skipping self-update"
+                );
+            }
+        }
+    }
+
     Ok(())
 }
 
