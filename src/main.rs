@@ -1,24 +1,43 @@
 mod config;
 mod labels;
+mod logging;
 mod self_container;
 
 use anyhow::{Context, Result};
 use bollard::Docker;
 use clap::Parser as _;
-use config::Config;
+use config::{Config, ValidatedConfig};
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    let cfg = Config::parse().validate()?;
+async fn main() {
+    let cfg = match Config::parse().validate() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("error: {e:#}");
+            std::process::exit(1);
+        }
+    };
+
+    if let Err(e) = logging::init(cfg.log_level) {
+        eprintln!("error: {e:#}");
+        std::process::exit(1);
+    }
+
+    if let Err(e) = run(cfg).await {
+        tracing::error!("Application error: {e:#}");
+        std::process::exit(1);
+    }
+}
+
+async fn run(cfg: ValidatedConfig) -> Result<()> {
     let docker = connect_docker(cfg.host.as_deref())?;
     docker
         .version()
         .await
         .context("Docker daemon not reachable - is the socket mounted?")?;
-    println!(
-        "Connected to Docker daemon successfully. Version: {}",
-        docker.version().await?.version.unwrap()
-    );
+
+    let version = docker.version().await?.version.unwrap_or_default();
+    tracing::info!("Connected to Docker daemon (version {version})");
     Ok(())
 }
 

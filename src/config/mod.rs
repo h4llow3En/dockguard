@@ -1,5 +1,6 @@
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use clap::Parser;
+use tracing::Level;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -30,11 +31,6 @@ pub struct Config {
     #[arg(long, env = "GUARD_PULL_TIMEOUT", default_value_t = 300)]
     pub pull_timeout: u64,
 
-    /// Also update dockguard's own container when running inside Docker.
-    /// Has no effect when dockguard is not running in a container.
-    #[arg(env = "GUARD_SELF_UPDATE", default_value_t = false)]
-    pub self_update: bool,
-
     /// Run once and exit instead of running as a daemon
     #[arg(long, default_value_t = false)]
     pub once: bool,
@@ -47,7 +43,7 @@ pub struct ValidatedConfig {
     pub host: Option<String>,
     pub enable: bool,
     pub self_update: bool,
-    pub log_level: String,
+    pub log_level: Level,
     pub pull_timeout: u64,
     pub once: bool,
 }
@@ -58,6 +54,15 @@ impl Config {
             self.pull_timeout > 0,
             "--pull-timeout must be greater than 0"
         );
+
+        let log_level = self
+            .log_level
+            .parse::<Level>()
+            .with_context(|| format!("Invalid log level '{}': expected one of trace, debug, info, warn, error", self.log_level))?;
+
+        let self_update = std::env::var("GUARD_SELF_UPDATE")
+            .map(|v| matches!(v.to_lowercase().as_str(), "true" | "1" | "yes"))
+            .unwrap_or(false);
 
         if let Some(ref host) = self.host {
             let valid_schemes = ["unix://", "tcp://", "http://", "https://"];
@@ -72,8 +77,8 @@ impl Config {
             clean: self.clean,
             host: self.host,
             enable: self.enable,
-            self_update: self.self_update,
-            log_level: self.log_level,
+            self_update,
+            log_level,
             pull_timeout: self.pull_timeout,
             once: self.once,
         })
