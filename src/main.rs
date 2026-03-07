@@ -2,11 +2,15 @@ mod config;
 mod labels;
 mod logging;
 mod self_container;
+mod watcher;
 
 use anyhow::{Context, Result};
 use bollard::Docker;
 use clap::Parser as _;
 use config::{Config, ValidatedConfig};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 #[tokio::main]
 async fn main() {
@@ -29,7 +33,9 @@ async fn main() {
     }
 }
 
+/// Main application logic after configuration and logging are set up.
 async fn run(cfg: ValidatedConfig) -> Result<()> {
+    let managed = Arc::new(RwLock::new(HashMap::new()));
     let docker = connect_docker(cfg.host.as_deref())?;
     docker
         .version()
@@ -38,6 +44,10 @@ async fn run(cfg: ValidatedConfig) -> Result<()> {
 
     let version = docker.version().await?.version.unwrap_or_default();
     tracing::info!("Connected to Docker daemon (version {version})");
+
+    let docker_watch = docker.clone();
+    let cfg_watch = cfg.clone();
+    let managed_watch = Arc::clone(&managed);
 
     if cfg.self_update {
         match self_container::resolve_own_container(&docker).await {
@@ -58,9 +68,18 @@ async fn run(cfg: ValidatedConfig) -> Result<()> {
         }
     }
 
+    let watcher = tokio::spawn(async move {
+        if let Err(e) = watcher::watch(&docker_watch, &cfg_watch, managed_watch).await {
+            tracing::error!("Container watch error: {e:#}");
+        }
+    });
+
+    let _ = watcher.await;
+
     Ok(())
 }
 
+/// Connects to the Docker daemon using the specified host URI or local defaults.
 fn connect_docker(host: Option<&str>) -> Result<Docker> {
     match host {
         None => Docker::connect_with_local_defaults()

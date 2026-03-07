@@ -267,6 +267,7 @@ dependencies = [
  "anyhow",
  "bollard",
  "clap",
+ "futures-util",
  "tokio",
  "tracing",
  "tracing-subscriber",

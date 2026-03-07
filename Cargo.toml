@@ -14,6 +14,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0"
+futures-util = "0.3"
 bollard = { version = "0.20.1", features = ["ssl"] }
 tokio = { version = "1.50", features = ["full"]}
 clap = { version = "4.5", features = ["derive", "env"] }

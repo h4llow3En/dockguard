@@ -1,0 +1,115 @@
+use super::*;
+use crate::labels::UpdateTrigger;
+
+fn labels(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+    pairs
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect()
+}
+
+// --- opt-in Modus (global_enable = true) ---
+
+#[test]
+fn opt_in_without_label_is_not_managed() {
+    let result = try_build_managed("id", "name", "image", "image_id", &HashMap::new(), true);
+    assert!(result.is_none());
+}
+
+#[test]
+fn opt_in_with_enable_true_is_managed() {
+    let l = labels(&[("dockguard.enable", "true")]);
+    let result = try_build_managed(
+        "abc123",
+        "/my-container",
+        "nginx:latest",
+        "sha256:abc",
+        &l,
+        true,
+    );
+    let mc = result.expect("should be managed");
+    assert_eq!(mc.id, "abc123");
+    assert_eq!(mc.name, "/my-container");
+    assert_eq!(mc.image, "nginx:latest");
+    assert_eq!(mc.image_id, "sha256:abc");
+}
+
+#[test]
+fn opt_in_with_enable_false_is_not_managed() {
+    let l = labels(&[("dockguard.enable", "false")]);
+    let result = try_build_managed("id", "name", "image", "image_id", &l, true);
+    assert!(result.is_none());
+}
+
+// --- opt-out Modus (global_enable = false) ---
+
+#[test]
+fn opt_out_without_label_is_managed() {
+    let result = try_build_managed("id", "name", "image", "image_id", &HashMap::new(), false);
+    assert!(result.is_some());
+}
+
+#[test]
+fn opt_out_with_enable_false_is_not_managed() {
+    let l = labels(&[("dockguard.enable", "false")]);
+    let result = try_build_managed("id", "name", "image", "image_id", &l, false);
+    assert!(result.is_none());
+}
+
+// --- Ungültige Labels ---
+
+#[test]
+fn invalid_enable_label_returns_none() {
+    let l = labels(&[("dockguard.enable", "maybe")]);
+    let result = try_build_managed("id", "name", "image", "image_id", &l, true);
+    assert!(result.is_none());
+}
+
+#[test]
+fn mutually_exclusive_schedule_and_interval_returns_none() {
+    let l = labels(&[
+        ("dockguard.enable", "true"),
+        ("dockguard.schedule", "0 3 * * *"),
+        ("dockguard.interval", "3600"),
+    ]);
+    let result = try_build_managed("id", "name", "image", "image_id", &l, true);
+    assert!(result.is_none());
+}
+
+// --- Trigger-Typen ---
+
+#[test]
+fn schedule_trigger_is_preserved() {
+    let l = labels(&[
+        ("dockguard.enable", "true"),
+        ("dockguard.schedule", "0 3 * * *"),
+    ]);
+    let mc =
+        try_build_managed("id", "name", "image", "image_id", &l, true).expect("should be managed");
+    assert!(matches!(
+        mc.config.update_trigger,
+        UpdateTrigger::Schedule(_)
+    ));
+}
+
+#[test]
+fn interval_trigger_is_preserved() {
+    let l = labels(&[("dockguard.enable", "true"), ("dockguard.interval", "3600")]);
+    let mc =
+        try_build_managed("id", "name", "image", "image_id", &l, true).expect("should be managed");
+    assert!(matches!(
+        mc.config.update_trigger,
+        UpdateTrigger::Interval(3600)
+    ));
+}
+
+#[test]
+fn default_trigger_is_interval_86400() {
+    let l = labels(&[("dockguard.enable", "true")]);
+    let mc =
+        try_build_managed("id", "name", "image", "image_id", &l, true).expect("should be managed");
+    assert!(matches!(
+        mc.config.update_trigger,
+        UpdateTrigger::Interval(86400)
+    ));
+}

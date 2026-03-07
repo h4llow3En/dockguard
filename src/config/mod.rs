@@ -37,7 +37,7 @@ pub struct Config {
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ValidatedConfig {
     pub clean: bool,
     pub host: Option<String>,
