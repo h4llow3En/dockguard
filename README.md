@@ -28,7 +28,7 @@ It runs either as a standalone binary (daemon or one-shot) or as a Docker contai
 
 ## Installation
 
-### Docker compose (recommended option)
+### Docker Compose (recommended)
 
 ```yaml
 services:
@@ -40,6 +40,38 @@ services:
       GUARD_LOG_LEVEL: info
       GUARD_SELF_UPDATE: "true"
     restart: unless-stopped
+```
+
+### Pre-built binaries
+
+Download the latest release for your platform from the [GitHub Releases page](https://github.com/h4llow3En/dockguard/releases):
+
+| Platform | Archive |
+|---|---|
+| Linux x86\_64 | `dockguard-x86_64-unknown-linux-gnu.tar.gz` |
+| Linux aarch64 | `dockguard-aarch64-unknown-linux-gnu.tar.gz` |
+| macOS x86\_64 | `dockguard-x86_64-apple-darwin.tar.gz` |
+| macOS Apple Silicon | `dockguard-aarch64-apple-darwin.tar.gz` |
+
+```bash
+tar xzf dockguard-<target>.tar.gz
+sudo mv dockguard /usr/local/bin/
+```
+
+### Debian / Ubuntu (.deb)
+
+```bash
+# Download the .deb from the releases page, then:
+sudo dpkg -i dockguard_<version>_amd64.deb
+```
+
+### RHEL / Fedora / openSUSE (.rpm)
+
+```bash
+# Download the .rpm from the releases page, then:
+sudo rpm -i dockguard-<version>.x86_64.rpm
+# or with dnf:
+sudo dnf install dockguard-<version>.x86_64.rpm
 ```
 
 ### cargo install
@@ -109,12 +141,6 @@ services:
 | `dockguard.watch` | bool | `false` | Log available updates without applying them |
 
 **Boolean labels** accept: `true`, `1`, `yes` / `false`, `0`, `no` (case-insensitive).
-
----
-
-## Running as a Docker container
-
-
 
 ---
 
