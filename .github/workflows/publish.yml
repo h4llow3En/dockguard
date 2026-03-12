@@ -80,11 +80,30 @@ jobs:
           tar czf dockguard-${{ matrix.target }}.tar.gz \
             -C target/${{ matrix.target }}/release dockguard
 
+      - name: Install packaging tools (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deb,cargo-generate-rpm
+
+      - name: Package deb and rpm (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          mkdir -p target/release
+          cp target/${{ matrix.target }}/release/dockguard target/release/dockguard
+          cargo deb --target ${{ matrix.target }} --no-build
+          cargo generate-rpm --target ${{ matrix.target }}
+          find target -name "*.deb" -exec mv {} . \;
+          find target -name "*.rpm" -exec mv {} . \;
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: dockguard-${{ matrix.target }}
-          path: dockguard-${{ matrix.target }}.tar.gz
+          path: |
+            dockguard-${{ matrix.target }}.tar.gz
+            *.deb
+            *.rpm
 
   publish:
     name: Publish to crates.io
