@@ -9,7 +9,10 @@ use bollard::Docker;
 use clap::Parser as _;
 use config::{Config, ValidatedConfig};
 use std::collections::HashMap;
+use std::io::Read;
 use std::sync::Arc;
+use tokio::io::AsyncWriteExt;
+use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 
 #[tokio::main]
@@ -21,6 +24,19 @@ async fn main() {
             std::process::exit(1);
         }
     };
+
+    if cfg.healthcheck {
+        if let Ok(mut stream) = std::net::TcpStream::connect("127.0.0.1:27748") {
+            let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(2)));
+            let mut buf = [0; 2];
+            if let Ok(2) = stream.read(&mut buf)
+                && &buf == b"ok"
+            {
+                std::process::exit(0);
+            }
+        }
+        std::process::exit(1);
+    }
 
     if let Err(e) = logging::init(cfg.log_level) {
         eprintln!("error: {e:#}");
@@ -67,6 +83,25 @@ async fn run(cfg: ValidatedConfig) -> Result<()> {
             }
         }
     }
+
+    let docker_health = docker.clone();
+    tokio::spawn(async move {
+        match TcpListener::bind("127.0.0.1:27748").await {
+            Ok(listener) => loop {
+                if let Ok((mut stream, _)) = listener.accept().await {
+                    let response = if docker_health.ping().await.is_ok() {
+                        b"ok"
+                    } else {
+                        b"no"
+                    };
+                    let _ = stream.write_all(response).await;
+                }
+            },
+            Err(e) => {
+                tracing::error!("Failed to start healthcheck listener: {e:#}");
+            }
+        }
+    });
 
     let watcher = tokio::spawn(async move {
         if let Err(e) = watcher::watch(&docker_watch, &cfg_watch, managed_watch).await {

@@ -8,6 +8,7 @@ fn base_config() -> Config {
         log_level: "info".to_string(),
         pull_timeout: 300,
         once: false,
+        healthcheck: false,
     }
 }
 

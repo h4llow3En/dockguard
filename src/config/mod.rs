@@ -34,6 +34,10 @@ pub struct Config {
     /// Run once and exit instead of running as a daemon
     #[arg(long, default_value_t = false)]
     pub once: bool,
+
+    /// Internal flag to run the healthcheck
+    #[arg(long, default_value_t = false, hide = true)]
+    pub healthcheck: bool,
 }
 
 #[allow(dead_code)]
@@ -46,6 +50,7 @@ pub struct ValidatedConfig {
     pub log_level: Level,
     pub pull_timeout: u64,
     pub once: bool,
+    pub healthcheck: bool,
 }
 
 impl Config {
@@ -83,6 +88,7 @@ impl Config {
             log_level,
             pull_timeout: self.pull_timeout,
             once: self.once,
+            healthcheck: self.healthcheck,
         })
     }
 }

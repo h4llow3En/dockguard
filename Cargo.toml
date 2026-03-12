@@ -1,5 +1,6 @@
 [package]
 name = "dockguard"
+authors = ["Felix Döring <development@felixdoering.com>"]
 description = "A Docker container update watcher"
 version = "0.1.0"
 edition = "2024"
