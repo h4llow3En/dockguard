@@ -1,6 +1,7 @@
 mod config;
 mod labels;
 mod logging;
+mod scheduler;
 mod self_container;
 mod watcher;
 

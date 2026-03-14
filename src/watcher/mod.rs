@@ -7,14 +7,17 @@ use futures_util::StreamExt;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tokio_util::sync::CancellationToken;
 
 #[allow(dead_code)]
+#[derive(Debug, Clone)]
 pub struct ManagedContainer {
     pub id: String,
     pub name: String,
     pub image: String,
     pub image_id: String,
     pub config: ResolvedContainerConfig,
+    pub cancel_token: CancellationToken,
 }
 
 pub type ManagedContainers = Arc<RwLock<HashMap<String, ManagedContainer>>>;
@@ -46,6 +49,7 @@ pub(crate) fn try_build_managed(
         image: image.to_string(),
         image_id: image_id.to_string(),
         config: resolved,
+        cancel_token: CancellationToken::new(),
     })
 }
 
@@ -94,6 +98,7 @@ pub async fn watch(
                 "Managing container {name} (image: {image}) with trigger: {:?}",
                 mc.config.update_trigger
             );
+            tokio::spawn(crate::scheduler::run(docker.clone(), mc.clone()));
             managed.write().await.insert(mc.id.clone(), mc);
         } else {
             tracing::debug!("Container {name} (image: {image}) is not enabled for management");
@@ -135,8 +140,10 @@ pub async fn watch(
                                 try_build_managed(id, name, image, image_id, labels, cfg.enable)
                             {
                                 tracing::info!(
-                                    "New container {name} (image: {image}) - now managing"
+                                    "New container {name} (image: {image}) with trigger: {:?}",
+                                    mc.config.update_trigger
                                 );
+                                tokio::spawn(crate::scheduler::run(docker.clone(), mc.clone()));
                                 managed.write().await.insert(mc.id.clone(), mc);
                             } else {
                                 tracing::debug!("New container {name} - not managed");
@@ -145,8 +152,12 @@ pub async fn watch(
                         Err(err) => tracing::error!("Failed to inspect container {id}: {err:#}"),
                     },
                     "die" | "destroy" => {
-                        if managed.write().await.remove(id).is_some() {
-                            tracing::info!("Container {id} stopped/destroyed - no longer managing");
+                        if let Some(mc) = managed.write().await.remove(id) {
+                            mc.cancel_token.cancel();
+                            tracing::info!(
+                                "Container {} stopped/destroyed - no longer managing",
+                                mc.name
+                            );
                         }
                     }
 

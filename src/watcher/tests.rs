@@ -103,6 +103,32 @@ fn interval_trigger_is_preserved() {
     ));
 }
 
+// --- watch / stop-timeout ---
+
+#[test]
+fn watch_mode_is_preserved() {
+    let l = labels(&[("dockguard.enable", "true"), ("dockguard.watch", "true")]);
+    let mc = try_build_managed("id", "name", "image", "image_id", &l, true).unwrap();
+    assert!(mc.config.watch);
+}
+
+#[test]
+fn stop_timeout_is_preserved() {
+    let l = labels(&[
+        ("dockguard.enable", "true"),
+        ("dockguard.stop-timeout", "30"),
+    ]);
+    let mc = try_build_managed("id", "name", "image", "image_id", &l, true).unwrap();
+    assert_eq!(mc.config.stop_timeout, 30);
+}
+
+#[test]
+fn cancel_token_is_not_cancelled_initially() {
+    let l = labels(&[("dockguard.enable", "true")]);
+    let mc = try_build_managed("id", "name", "image", "image_id", &l, true).unwrap();
+    assert!(!mc.cancel_token.is_cancelled());
+}
+
 #[test]
 fn default_trigger_is_interval_86400() {
     let l = labels(&[("dockguard.enable", "true")]);

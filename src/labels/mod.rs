@@ -20,7 +20,7 @@ const KNOWN_LABELS: &[&str] = &[
     LABEL_WATCH,
 ];
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum UpdateTrigger {
     Interval(u64),
     Schedule(String),
@@ -41,7 +41,7 @@ pub struct ContainerLabels {
 }
 
 /// Fully resolved per-container configuration after applying defaults.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ResolvedContainerConfig {
     pub enabled: bool,
     pub update_trigger: UpdateTrigger,
@@ -115,8 +115,8 @@ impl ContainerLabels {
 
         let update_trigger = match (self.schedule, self.interval) {
             (Some(cron), None) => {
-                validate_cron(&cron)?;
-                UpdateTrigger::Schedule(cron)
+                let normalized_cron = validate_cron(&cron)?;
+                UpdateTrigger::Schedule(normalized_cron)
             }
             (None, Some(secs)) => {
                 ensure!(
@@ -164,7 +164,7 @@ fn parse_bool(value: &str, label: &str) -> Result<bool> {
     }
 }
 
-fn validate_cron(expr: &str) -> Result<()> {
+fn validate_cron(expr: &str) -> Result<String> {
     let parts: Vec<&str> = expr.split_whitespace().collect();
     ensure!(
         parts.len() == 5 || parts.len() == 6,
@@ -172,7 +172,11 @@ fn validate_cron(expr: &str) -> Result<()> {
         expr,
         parts.len()
     );
-    Ok(())
+    Ok(if parts.len() == 5 {
+        format!("0 {expr} *")
+    } else {
+        format!("{expr} *")
+    })
 }
 
 #[cfg(test)]
