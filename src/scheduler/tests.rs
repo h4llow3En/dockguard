@@ -1,10 +1,15 @@
 use super::*;
 use crate::config::ValidatedConfig;
 use crate::labels::{ResolvedContainerConfig, UpdateTrigger};
+use crate::watcher::UpdateGate;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time;
 use tokio_util::sync::CancellationToken;
+
+fn make_gate() -> UpdateGate {
+    Arc::new(tokio::sync::RwLock::new(()))
+}
 
 fn make_cfg() -> Arc<ValidatedConfig> {
     Arc::new(ValidatedConfig {
@@ -102,7 +107,7 @@ async fn run_exits_when_token_pre_cancelled() {
     let container = make_container(UpdateTrigger::Interval(86400));
     container.cancel_token.cancel();
     // Should return immediately without sleeping the full interval
-    run(docker, container, make_cfg()).await;
+    run(docker, container, make_cfg(), make_gate(), false).await;
 }
 
 #[tokio::test]
@@ -112,7 +117,7 @@ async fn run_exits_when_token_cancelled_after_spawn() {
     let container = make_container(UpdateTrigger::Interval(86400));
     let token = container.cancel_token.clone();
 
-    let handle = tokio::spawn(run(docker, container, make_cfg()));
+    let handle = tokio::spawn(run(docker, container, make_cfg(), make_gate(), false));
     token.cancel();
     // Yield to the runtime so the spawned task can poll and see the cancellation
     time::advance(Duration::from_millis(1)).await;

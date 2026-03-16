@@ -23,6 +23,13 @@ pub struct ManagedContainer {
 
 pub type ManagedContainers = Arc<RwLock<HashMap<String, ManagedContainer>>>;
 
+/// Shared gate that serialises self-updates against all other container updates.
+///
+/// - Regular updates acquire a **read** guard (many can run in parallel).
+/// - Self-updates acquire the **write** guard (exclusive: waits for all running
+///   updates to finish, then prevents new ones from starting).
+pub type UpdateGate = Arc<RwLock<()>>;
+
 /// Try building `ManagedContainer` from container metadata.
 /// Returns `None` if the container should not be managed
 /// or if the labels are invalid (errors are logged as `warn`).
@@ -65,6 +72,7 @@ pub async fn watch(
     cfg: Arc<ValidatedConfig>,
     managed: ManagedContainers,
     own_container_id: Option<String>,
+    gate: UpdateGate,
 ) -> Result<()> {
     let mut event_stream = docker.events(Some(EventsOptions {
         filters: Some(std::collections::HashMap::from([(
@@ -120,6 +128,8 @@ pub async fn watch(
                     docker.clone(),
                     mc.clone(),
                     Arc::clone(&cfg),
+                    Arc::clone(&gate),
+                    force_enable,
                 ));
                 managed.write().await.insert(mc.id.clone(), mc);
             }
@@ -174,6 +184,8 @@ pub async fn watch(
                                     docker.clone(),
                                     mc.clone(),
                                     Arc::clone(&cfg),
+                                    Arc::clone(&gate),
+                                    false,
                                 ));
                                 managed.write().await.insert(mc.id.clone(), mc);
                             } else {

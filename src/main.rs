@@ -16,6 +16,7 @@ use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
+use watcher::UpdateGate;
 
 #[tokio::main]
 async fn main() {
@@ -66,6 +67,7 @@ async fn run(cfg: Arc<ValidatedConfig>) -> Result<()> {
     let docker_watch = docker.clone();
     let cfg_watch = Arc::clone(&cfg);
     let managed_watch = Arc::clone(&managed);
+    let gate: UpdateGate = Arc::new(RwLock::new(()));
 
     let own_container_id: Option<String> = if cfg.self_update {
         match self_container::resolve_own_container(&docker).await {
@@ -112,8 +114,14 @@ async fn run(cfg: Arc<ValidatedConfig>) -> Result<()> {
     });
 
     let watcher = tokio::spawn(async move {
-        if let Err(e) =
-            watcher::watch(&docker_watch, cfg_watch, managed_watch, own_container_id).await
+        if let Err(e) = watcher::watch(
+            &docker_watch,
+            cfg_watch,
+            managed_watch,
+            own_container_id,
+            gate,
+        )
+        .await
         {
             tracing::error!("Container watch error: {e:#}");
         }

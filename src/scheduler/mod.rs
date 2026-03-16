@@ -1,7 +1,7 @@
 use crate::config::ValidatedConfig;
 use crate::labels::UpdateTrigger;
 use crate::updater::perform_update;
-use crate::watcher::ManagedContainer;
+use crate::watcher::{ManagedContainer, UpdateGate};
 use bollard::Docker;
 use chrono::Utc;
 use cron::Schedule;
@@ -14,7 +14,13 @@ pub enum UpdateStatus {
     UpdateAvailable { local: String, remote: String },
 }
 
-pub async fn run(docker: Docker, container: ManagedContainer, cfg: Arc<ValidatedConfig>) {
+pub async fn run(
+    docker: Docker,
+    container: ManagedContainer,
+    cfg: Arc<ValidatedConfig>,
+    gate: UpdateGate,
+    is_self: bool,
+) {
     tracing::debug!("Scheduler started for container {}", container.name);
     loop {
         tokio::select! {
@@ -42,18 +48,39 @@ pub async fn run(docker: Docker, container: ManagedContainer, cfg: Arc<Validated
                                 remote = %remote,
                                 "Image update available — triggering update"
                             );
-                            if let Err(e) = perform_update(
-                                &docker,
-                                &container,
-                                cfg.pull_timeout,
-                                cfg.clean,
-                            )
-                            .await
-                            {
-                                tracing::error!(
-                                    "Update of container {} failed: {e:#}",
-                                    container.name
-                                );
+                            // Self-updates acquire an exclusive write lock so all
+                            // other in-progress updates finish first and no new
+                            // ones can start while dockguard is replacing itself.
+                            // Regular updates hold a shared read lock.
+                            if is_self {
+                                let _guard = gate.write().await;
+                                if let Err(e) = perform_update(
+                                    &docker,
+                                    &container,
+                                    cfg.pull_timeout,
+                                    cfg.clean,
+                                )
+                                .await
+                                {
+                                    tracing::error!(
+                                        "Self-update failed: {e:#}"
+                                    );
+                                }
+                            } else {
+                                let _guard = gate.read().await;
+                                if let Err(e) = perform_update(
+                                    &docker,
+                                    &container,
+                                    cfg.pull_timeout,
+                                    cfg.clean,
+                                )
+                                .await
+                                {
+                                    tracing::error!(
+                                        "Update of container {} failed: {e:#}",
+                                        container.name
+                                    );
+                                }
                             }
                         }
                     }
