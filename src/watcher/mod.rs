@@ -1,6 +1,6 @@
 use crate::config::ValidatedConfig;
-use crate::labels::ContainerLabels;
-use crate::labels::ResolvedContainerConfig;
+use crate::labels::{ContainerLabels, ResolvedContainerConfig};
+use crate::scheduler;
 use anyhow::Result;
 use bollard::Docker;
 use bollard::query_parameters::{EventsOptions, ListContainersOptions};
@@ -10,7 +10,6 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct ManagedContainer {
     pub id: String,
@@ -45,6 +44,12 @@ pub(crate) fn try_build_managed(
     let parsed = ContainerLabels::from_map(labels)
         .map_err(|e| tracing::warn!("Container {name}: invalid labels: {e:#}"))
         .ok()?;
+    if !parsed.unknown_labels.is_empty() {
+        tracing::info!(
+            "Container {name}: ignoring unknown labels: {}",
+            parsed.unknown_labels.join(", ")
+        );
+    }
     let resolved = parsed
         .resolve(global_enable)
         .map_err(|e| tracing::warn!("Container {name}: invalid config: {e:#}"))
@@ -75,7 +80,7 @@ pub async fn watch(
     gate: UpdateGate,
 ) -> Result<()> {
     let mut event_stream = docker.events(Some(EventsOptions {
-        filters: Some(std::collections::HashMap::from([(
+        filters: Some(HashMap::from([(
             "type".to_string(),
             vec!["container".to_string()],
         )])),
@@ -124,7 +129,7 @@ pub async fn watch(
                     "Managing container {name} (image: {image}) with trigger: {:?}",
                     mc.config.update_trigger
                 );
-                tokio::spawn(crate::scheduler::run(
+                tokio::spawn(scheduler::run(
                     docker.clone(),
                     mc.clone(),
                     Arc::clone(&cfg),
@@ -180,7 +185,7 @@ pub async fn watch(
                                     "New container {name} (image: {image}) with trigger: {:?}",
                                     mc.config.update_trigger
                                 );
-                                tokio::spawn(crate::scheduler::run(
+                                tokio::spawn(scheduler::run(
                                     docker.clone(),
                                     mc.clone(),
                                     Arc::clone(&cfg),

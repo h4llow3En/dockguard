@@ -48,39 +48,15 @@ pub async fn run(
                                 remote = %remote,
                                 "Image update available — triggering update"
                             );
-                            // Self-updates acquire an exclusive write lock so all
-                            // other in-progress updates finish first and no new
-                            // ones can start while dockguard is replacing itself.
-                            // Regular updates hold a shared read lock.
-                            if is_self {
+                            let result = if is_self {
                                 let _guard = gate.write().await;
-                                if let Err(e) = perform_update(
-                                    &docker,
-                                    &container,
-                                    cfg.pull_timeout,
-                                    cfg.clean,
-                                )
-                                .await
-                                {
-                                    tracing::error!(
-                                        "Self-update failed: {e:#}"
-                                    );
-                                }
+                                perform_update(&docker, &container, cfg.pull_timeout, cfg.clean).await
                             } else {
                                 let _guard = gate.read().await;
-                                if let Err(e) = perform_update(
-                                    &docker,
-                                    &container,
-                                    cfg.pull_timeout,
-                                    cfg.clean,
-                                )
-                                .await
-                                {
-                                    tracing::error!(
-                                        "Update of container {} failed: {e:#}",
-                                        container.name
-                                    );
-                                }
+                                perform_update(&docker, &container, cfg.pull_timeout, cfg.clean).await
+                            };
+                            if let Err(e) = result {
+                                tracing::error!("Update of container {} failed: {e:#}", container.name);
                             }
                         }
                     }

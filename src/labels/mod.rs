@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use anyhow::{Result, bail, ensure};
 use std::collections::HashMap;
 
