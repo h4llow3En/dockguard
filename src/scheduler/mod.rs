@@ -1,9 +1,12 @@
+use crate::config::ValidatedConfig;
 use crate::labels::UpdateTrigger;
+use crate::updater::perform_update;
 use crate::watcher::ManagedContainer;
 use bollard::Docker;
 use chrono::Utc;
 use cron::Schedule;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
 pub enum UpdateStatus {
@@ -11,7 +14,7 @@ pub enum UpdateStatus {
     UpdateAvailable { local: String, remote: String },
 }
 
-pub async fn run(docker: Docker, container: ManagedContainer) {
+pub async fn run(docker: Docker, container: ManagedContainer, cfg: Arc<ValidatedConfig>) {
     tracing::debug!("Scheduler started for container {}", container.name);
     loop {
         tokio::select! {
@@ -39,7 +42,19 @@ pub async fn run(docker: Docker, container: ManagedContainer) {
                                 remote = %remote,
                                 "Image update available — triggering update"
                             );
-                            // TODO: trigger update action
+                            if let Err(e) = perform_update(
+                                &docker,
+                                &container,
+                                cfg.pull_timeout,
+                                cfg.clean,
+                            )
+                            .await
+                            {
+                                tracing::error!(
+                                    "Update of container {} failed: {e:#}",
+                                    container.name
+                                );
+                            }
                         }
                     }
                     Some(UpdateStatus::UpToDate) => {

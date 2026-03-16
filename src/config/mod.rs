@@ -1,5 +1,6 @@
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
+use std::sync::Arc;
 use tracing::Level;
 
 #[derive(Parser, Debug)]
@@ -54,7 +55,7 @@ pub struct ValidatedConfig {
 }
 
 impl Config {
-    pub fn validate(self) -> Result<ValidatedConfig> {
+    pub fn validate(self) -> Result<Arc<ValidatedConfig>> {
         ensure!(
             self.pull_timeout > 0,
             "--pull-timeout must be greater than 0"
@@ -80,7 +81,7 @@ impl Config {
             );
         }
 
-        Ok(ValidatedConfig {
+        Ok(Arc::new(ValidatedConfig {
             clean: self.clean,
             host: self.host,
             enable: self.enable,
@@ -89,7 +90,7 @@ impl Config {
             pull_timeout: self.pull_timeout,
             once: self.once,
             healthcheck: self.healthcheck,
-        })
+        }))
     }
 }
 

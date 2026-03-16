@@ -1,5 +1,6 @@
+use crate::config::ValidatedConfig;
 use crate::labels::ContainerLabels;
-use crate::{config::ValidatedConfig, labels::ResolvedContainerConfig};
+use crate::labels::ResolvedContainerConfig;
 use anyhow::Result;
 use bollard::Docker;
 use bollard::query_parameters::{EventsOptions, ListContainersOptions};
@@ -61,7 +62,7 @@ mod tests;
 /// and then listens for Docker events to keep it updated.
 pub async fn watch(
     docker: &Docker,
-    cfg: &ValidatedConfig,
+    cfg: Arc<ValidatedConfig>,
     managed: ManagedContainers,
     own_container_id: Option<String>,
 ) -> Result<()> {
@@ -88,7 +89,7 @@ pub async fn watch(
             .names
             .as_ref()
             .and_then(|n| n.first())
-            .map(|s| s.as_str())
+            .map(|s| s.trim_start_matches('/'))
             .unwrap_or("<unknown>");
         let image = container.image.as_deref().unwrap_or("<unknown>");
         let id = container.id.as_deref().unwrap_or_default();
@@ -115,7 +116,11 @@ pub async fn watch(
                     "Managing container {name} (image: {image}) with trigger: {:?}",
                     mc.config.update_trigger
                 );
-                tokio::spawn(crate::scheduler::run(docker.clone(), mc.clone()));
+                tokio::spawn(crate::scheduler::run(
+                    docker.clone(),
+                    mc.clone(),
+                    Arc::clone(&cfg),
+                ));
                 managed.write().await.insert(mc.id.clone(), mc);
             }
         } else {
@@ -141,7 +146,11 @@ pub async fn watch(
                 match action {
                     "start" => match docker.inspect_container(id, None).await {
                         Ok(info) => {
-                            let name = info.name.as_deref().unwrap_or("<unknown>");
+                            let name = info
+                                .name
+                                .as_deref()
+                                .unwrap_or("<unknown>")
+                                .trim_start_matches('/');
                             let image = info
                                 .config
                                 .as_ref()
@@ -161,7 +170,11 @@ pub async fn watch(
                                     "New container {name} (image: {image}) with trigger: {:?}",
                                     mc.config.update_trigger
                                 );
-                                tokio::spawn(crate::scheduler::run(docker.clone(), mc.clone()));
+                                tokio::spawn(crate::scheduler::run(
+                                    docker.clone(),
+                                    mc.clone(),
+                                    Arc::clone(&cfg),
+                                ));
                                 managed.write().await.insert(mc.id.clone(), mc);
                             } else {
                                 tracing::debug!("New container {name} - not managed");

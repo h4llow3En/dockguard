@@ -3,6 +3,7 @@ mod labels;
 mod logging;
 mod scheduler;
 mod self_container;
+mod updater;
 mod watcher;
 
 use anyhow::{Context, Result};
@@ -51,7 +52,7 @@ async fn main() {
 }
 
 /// Main application logic after configuration and logging are set up.
-async fn run(cfg: ValidatedConfig) -> Result<()> {
+async fn run(cfg: Arc<ValidatedConfig>) -> Result<()> {
     let managed = Arc::new(RwLock::new(HashMap::new()));
     let docker = connect_docker(cfg.host.as_deref())?;
     docker
@@ -63,7 +64,7 @@ async fn run(cfg: ValidatedConfig) -> Result<()> {
     tracing::info!("Connected to Docker daemon (version {version})");
 
     let docker_watch = docker.clone();
-    let cfg_watch = cfg.clone();
+    let cfg_watch = Arc::clone(&cfg);
     let managed_watch = Arc::clone(&managed);
 
     let own_container_id: Option<String> = if cfg.self_update {
@@ -112,7 +113,7 @@ async fn run(cfg: ValidatedConfig) -> Result<()> {
 
     let watcher = tokio::spawn(async move {
         if let Err(e) =
-            watcher::watch(&docker_watch, &cfg_watch, managed_watch, own_container_id).await
+            watcher::watch(&docker_watch, cfg_watch, managed_watch, own_container_id).await
         {
             tracing::error!("Container watch error: {e:#}");
         }
