@@ -32,6 +32,7 @@ pub(crate) fn try_build_managed(
     image_id: &str,
     labels: &HashMap<String, String>,
     global_enable: bool,
+    force_enable: bool,
 ) -> Option<ManagedContainer> {
     let parsed = ContainerLabels::from_map(labels)
         .map_err(|e| tracing::warn!("Container {name}: invalid labels: {e:#}"))
@@ -40,7 +41,7 @@ pub(crate) fn try_build_managed(
         .resolve(global_enable)
         .map_err(|e| tracing::warn!("Container {name}: invalid config: {e:#}"))
         .ok()?;
-    if !resolved.enabled {
+    if !resolved.enabled && !force_enable {
         return None;
     }
     Some(ManagedContainer {
@@ -62,6 +63,7 @@ pub async fn watch(
     docker: &Docker,
     cfg: &ValidatedConfig,
     managed: ManagedContainers,
+    own_container_id: Option<String>,
 ) -> Result<()> {
     let mut event_stream = docker.events(Some(EventsOptions {
         filters: Some(std::collections::HashMap::from([(
@@ -93,13 +95,29 @@ pub async fn watch(
         let image_id = container.image_id.as_deref().unwrap_or_default();
         let label_map = container.labels.as_ref().unwrap_or(&empty);
 
-        if let Some(mc) = try_build_managed(id, name, image, image_id, label_map, cfg.enable) {
-            tracing::info!(
-                "Managing container {name} (image: {image}) with trigger: {:?}",
-                mc.config.update_trigger
-            );
-            tokio::spawn(crate::scheduler::run(docker.clone(), mc.clone()));
-            managed.write().await.insert(mc.id.clone(), mc);
+        let is_own = own_container_id.as_deref() == Some(id);
+        let force_enable = is_own && cfg.self_update;
+        if let Some(mc) = try_build_managed(
+            id,
+            name,
+            image,
+            image_id,
+            label_map,
+            cfg.enable,
+            force_enable,
+        ) {
+            if is_own && !cfg.self_update {
+                tracing::warn!(
+                    "dockguard Container has management label set but GUARD_SELF_UPDATE is not set — own container will not be managed. Set GUARD_SELF_UPDATE=true to enable self-updates."
+                );
+            } else {
+                tracing::info!(
+                    "Managing container {name} (image: {image}) with trigger: {:?}",
+                    mc.config.update_trigger
+                );
+                tokio::spawn(crate::scheduler::run(docker.clone(), mc.clone()));
+                managed.write().await.insert(mc.id.clone(), mc);
+            }
         } else {
             tracing::debug!("Container {name} (image: {image}) is not enabled for management");
         }
@@ -136,9 +154,9 @@ pub async fn watch(
                                 .and_then(|c| c.labels.as_ref())
                                 .unwrap_or(&empty);
 
-                            if let Some(mc) =
-                                try_build_managed(id, name, image, image_id, labels, cfg.enable)
-                            {
+                            if let Some(mc) = try_build_managed(
+                                id, name, image, image_id, labels, cfg.enable, false,
+                            ) {
                                 tracing::info!(
                                     "New container {name} (image: {image}) with trigger: {:?}",
                                     mc.config.update_trigger

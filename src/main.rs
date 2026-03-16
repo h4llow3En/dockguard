@@ -66,7 +66,7 @@ async fn run(cfg: ValidatedConfig) -> Result<()> {
     let cfg_watch = cfg.clone();
     let managed_watch = Arc::clone(&managed);
 
-    if cfg.self_update {
+    let own_container_id: Option<String> = if cfg.self_update {
         match self_container::resolve_own_container(&docker).await {
             Some(info) => {
                 let name = info.name.as_deref().unwrap_or("<unknown>");
@@ -76,14 +76,20 @@ async fn run(cfg: ValidatedConfig) -> Result<()> {
                     .and_then(|c| c.image.as_deref())
                     .unwrap_or("<unknown>");
                 tracing::info!("Self-update enabled — own container: {name} (image: {image})");
+                info.id
             }
             None => {
                 tracing::warn!(
                     "Self-update enabled but dockguard does not appear to be running inside Docker — skipping self-update"
                 );
+                None
             }
         }
-    }
+    } else {
+        // Detect own container ID even without self-update so the watcher can warn
+        // if dockguard.enable is set on the own container without GUARD_SELF_UPDATE.
+        self_container::detect_own_container_id()
+    };
 
     let docker_health = docker.clone();
     tokio::spawn(async move {
@@ -105,7 +111,9 @@ async fn run(cfg: ValidatedConfig) -> Result<()> {
     });
 
     let watcher = tokio::spawn(async move {
-        if let Err(e) = watcher::watch(&docker_watch, &cfg_watch, managed_watch).await {
+        if let Err(e) =
+            watcher::watch(&docker_watch, &cfg_watch, managed_watch, own_container_id).await
+        {
             tracing::error!("Container watch error: {e:#}");
         }
     });
