@@ -1,4 +1,4 @@
-FROM gcr.io/distroless/cc-debian12:nonroot
+FROM gcr.io/distroless/cc-debian12
 
 ARG BINARY_PATH=target/debug/dockguard
 COPY ${BINARY_PATH} /usr/local/bin/dockguard

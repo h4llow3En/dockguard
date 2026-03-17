@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      skip_crates_publish:
+        description: "Skip publishing to crates.io"
+        type: boolean
+        default: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -86,6 +92,7 @@ jobs:
   publish:
     name: Publish to crates.io
     needs: verify
+    if: ${{ !inputs.skip_crates_publish }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -210,6 +217,7 @@ jobs:
   release:
     name: Create GitHub Release
     needs: [build, publish, docker-manifest]
+    if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
