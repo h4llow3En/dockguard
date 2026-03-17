@@ -58,22 +58,6 @@ tar xzf dockguard-<target>.tar.gz
 sudo mv dockguard /usr/local/bin/
 ```
 
-### Debian / Ubuntu (.deb)
-
-```bash
-# Download the .deb from the releases page, then:
-sudo dpkg -i dockguard_<version>_amd64.deb
-```
-
-### RHEL / Fedora / openSUSE (.rpm)
-
-```bash
-# Download the .rpm from the releases page, then:
-sudo rpm -i dockguard-<version>.x86_64.rpm
-# or with dnf:
-sudo dnf install dockguard-<version>.x86_64.rpm
-```
-
 ### cargo install
 
 ```bash

@@ -37,7 +37,7 @@ jobs:
             os: ubuntu-latest
             use-cross: true
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-latest
           - target: aarch64-apple-darwin
             os: macos-latest
     steps:
@@ -63,10 +63,6 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.use-cross != true
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
 
-      - name: Set OpenSSL path (macOS)
-        if: runner.os == 'macOS'
-        run: echo "OPENSSL_DIR=$(brew --prefix openssl)" >> $GITHUB_ENV
-
       - name: Build
         run: |
           if [ "${{ matrix.use-cross }}" = "true" ]; then
@@ -80,30 +76,11 @@ jobs:
           tar czf dockguard-${{ matrix.target }}.tar.gz \
             -C target/${{ matrix.target }}/release dockguard
 
-      - name: Install packaging tools (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-deb,cargo-generate-rpm
-
-      - name: Package deb and rpm (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          mkdir -p target/release
-          cp target/${{ matrix.target }}/release/dockguard target/release/dockguard
-          cargo deb --target ${{ matrix.target }} --no-build
-          cargo generate-rpm --target ${{ matrix.target }}
-          find target -name "*.deb" -exec mv {} . \;
-          find target -name "*.rpm" -exec mv {} . \;
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: dockguard-${{ matrix.target }}
-          path: |
-            dockguard-${{ matrix.target }}.tar.gz
-            *.deb
-            *.rpm
+          path: dockguard-${{ matrix.target }}.tar.gz
 
   publish:
     name: Publish to crates.io

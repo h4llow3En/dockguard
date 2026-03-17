@@ -2,7 +2,7 @@
 name = "dockguard"
 authors = ["Felix Döring <development@felixdoering.com>"]
 description = "A Docker container update watcher"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/h4llow3En/dockguard"
@@ -27,21 +27,3 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "chrono"] }
 
 [dev-dependencies]
 tokio = { version = "1.50", features = ["test-util"] }
-
-[package.metadata.deb]
-maintainer = "Felix Döring <development@felixdoering.com>"
-depends = "$auto"
-section = "utility"
-priority = "optional"
-assets = [
-    ["target/release/dockguard", "usr/bin/", "755"],
-    ["packaging/dockguard.service", "lib/systemd/system/dockguard.service", "644"],
-    ["README.md", "usr/share/doc/dockguard/README.md", "644"],
-]
-
-[package.metadata.generate-rpm]
-assets = [
-    { source = "target/release/dockguard", dest = "/usr/bin/dockguard", mode = "755" },
-    { source = "packaging/dockguard.service", dest = "/lib/systemd/system/dockguard.service", mode = "644" },
-    { source = "README.md", dest = "/usr/share/doc/dockguard/README.md", mode = "644", doc = true },
-]
