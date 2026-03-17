@@ -17,8 +17,8 @@ which cargo-set-version
 NEXT_VERSION=`convco version --bump HEAD`
 
 cargo set-version $NEXT_VERSION
-git add Cargo.toml
-git add Cargo.lock
+cargo generate-lockfile
+git add Cargo.toml Cargo.lock
 git commit -m "chore: bump version"
 git tag v$NEXT_VERSION
 
