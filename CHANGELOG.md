@@ -1,20 +1,14 @@
 # Changelog
 
-### [v0.1.3](https://github.com/h4llow3En/dockguard/compare/v0.1.2...v0.1.3) (2026-03-17)
+### [v0.1.4](https://github.com/h4llow3En/dockguard/compare/v0.1.3...v0.1.4) (2026-03-17)
 
 #### Fixes
 
-* creating release
-([d4ec7a2](https://github.com/h4llow3En/dockguard/commit/d4ec7a2f97d98525271fd32f109d9c8e8811c621))
+* check local registry for newer image first and resolve image if only sha512
+is present
+([181472a](https://github.com/h4llow3En/dockguard/commit/181472a8a7f769961498fd06ba4e81cada15f6a6))
 
-### [v0.1.2](https://github.com/h4llow3En/dockguard/compare/v0.1.1...v0.1.2) (2026-03-17)
-
-#### Fixes
-
-* build and publish docker containers
-([ff8cf9d](https://github.com/h4llow3En/dockguard/commit/ff8cf9d171bcf08f414cb9ec4e6f18d1d2d04a3f))
-
-### v0.1.1 (2026-03-17)
+### v0.1.3 (2026-03-17)
 
 #### Features
 
@@ -30,3 +24,13 @@
 ([ebde1f3](https://github.com/h4llow3En/dockguard/commit/ebde1f3d6e99981d39400cb4c8b37460caf07007))
 * logging logic and respect only ENV GUARD_SELF_UPDATE
 ([95676f5](https://github.com/h4llow3En/dockguard/commit/95676f5e7261765bf393a84ca43aea624c272541))
+
+#### Fixes
+
+* run docker image as root user since docker socket has 660 permissions on
+root:docker user
+([44b5b6b](https://github.com/h4llow3En/dockguard/commit/44b5b6b24d8ca0c673b953c71f8095047aa579b5))
+* creating release
+([d4ec7a2](https://github.com/h4llow3En/dockguard/commit/d4ec7a2f97d98525271fd32f109d9c8e8811c621))
+* build and publish docker containers
+([ff8cf9d](https://github.com/h4llow3En/dockguard/commit/ff8cf9d171bcf08f414cb9ec4e6f18d1d2d04a3f))
