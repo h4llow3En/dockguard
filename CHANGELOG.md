@@ -1,5 +1,12 @@
 # Changelog
 
+### [v0.1.3](https://github.com/h4llow3En/dockguard/compare/v0.1.2...v0.1.3) (2026-03-17)
+
+#### Fixes
+
+* creating release
+([d4ec7a2](https://github.com/h4llow3En/dockguard/commit/d4ec7a2f97d98525271fd32f109d9c8e8811c621))
+
 ### [v0.1.2](https://github.com/h4llow3En/dockguard/compare/v0.1.1...v0.1.2) (2026-03-17)
 
 #### Fixes
