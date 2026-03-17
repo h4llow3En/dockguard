@@ -1,5 +1,12 @@
 # Changelog
 
+### [v0.1.2](https://github.com/h4llow3En/dockguard/compare/v0.1.1...v0.1.2) (2026-03-17)
+
+#### Fixes
+
+* build and publish docker containers
+([ff8cf9d](https://github.com/h4llow3En/dockguard/commit/ff8cf9d171bcf08f414cb9ec4e6f18d1d2d04a3f))
+
 ### v0.1.1 (2026-03-17)
 
 #### Features
