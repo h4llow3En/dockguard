@@ -11,7 +11,11 @@ use std::time::Duration;
 
 pub enum UpdateStatus {
     UpToDate,
-    UpdateAvailable { local: String, remote: String },
+    UpdateAvailable {
+        local: String,
+        remote: String,
+        local_only: bool,
+    },
 }
 
 pub async fn run(
@@ -31,7 +35,7 @@ pub async fn run(
             _ = trigger_wait(&container.config.update_trigger) => {
                 tracing::debug!("Checking for updates for container {} (image: {})", container.name, container.image);
                 match check(&docker, &container).await {
-                    Some(UpdateStatus::UpdateAvailable { local, remote }) => {
+                    Some(UpdateStatus::UpdateAvailable { local, remote, local_only }) => {
                         if container.config.watch {
                             tracing::info!(
                                 container = %container.name,
@@ -50,10 +54,10 @@ pub async fn run(
                             );
                             let result = if is_self {
                                 let _guard = gate.write().await;
-                                perform_update(&docker, &container, cfg.pull_timeout, cfg.clean).await
+                                perform_update(&docker, &container, cfg.pull_timeout, cfg.clean, local_only).await
                             } else {
                                 let _guard = gate.read().await;
-                                perform_update(&docker, &container, cfg.pull_timeout, cfg.clean).await
+                                perform_update(&docker, &container, cfg.pull_timeout, cfg.clean, local_only).await
                             };
                             if let Err(e) = result {
                                 tracing::error!("Update of container {} failed: {e:#}", container.name);
@@ -105,10 +109,55 @@ async fn trigger_wait(trigger: &UpdateTrigger) {
     }
 }
 
-/// Checks whether a newer image is available in the registry without pulling.
-/// Returns `None` if the check could not be completed (errors are logged as `warn`).
+/// Checks whether a newer image is available for the container.
+///
+/// Two-phase comparison to minimise registry requests:
+/// **Local**: compare the image ID the container is running against the
+///            image ID the tag currently resolves to.  If they differ a newer version
+///            has already been pulled locally — no registry call needed.
+/// **Registry**: if the local image is up to date, compare its manifest
+///               digest against the registry to detect remote-only updates.
+///
+/// Returns `None` if the check could not be completed (errors are logged).
 pub async fn check(docker: &Docker, container: &ManagedContainer) -> Option<UpdateStatus> {
-    let local_digest = get_local_digest(docker, &container.image).await?;
+    let tagged_image = match docker.inspect_image(&container.image).await {
+        Ok(info) => info,
+        Err(e) => {
+            tracing::warn!("Could not inspect local image {}: {e:#}", container.image);
+            return None;
+        }
+    };
+
+    let tagged_id = tagged_image.id.as_deref().unwrap_or_default();
+    if tagged_id != container.image_id {
+        tracing::debug!(
+            "Container {} local image ID mismatch: running={}, tagged={}",
+            container.name,
+            container.image_id,
+            tagged_id
+        );
+        return Some(UpdateStatus::UpdateAvailable {
+            local: container.image_id.clone(),
+            remote: tagged_id.to_string(),
+            local_only: true,
+        });
+    }
+
+    let local_digest = tagged_image
+        .repo_digests
+        .as_ref()
+        .and_then(|digests| {
+            digests
+                .iter()
+                .find_map(|d| d.split_once('@').map(|(_, digest)| digest.to_string()))
+        })
+        .or_else(|| {
+            tracing::warn!(
+                "Image {} has no repo digest — cannot compare with registry (locally built?)",
+                container.image
+            );
+            None
+        })?;
 
     let remote_digest = match docker.inspect_registry_image(&container.image, None).await {
         Ok(info) => match info.descriptor.digest {
@@ -136,6 +185,7 @@ pub async fn check(docker: &Docker, container: &ManagedContainer) -> Option<Upda
         Some(UpdateStatus::UpdateAvailable {
             local: local_digest,
             remote: remote_digest,
+            local_only: false,
         })
     } else {
         Some(UpdateStatus::UpToDate)
@@ -144,21 +194,3 @@ pub async fn check(docker: &Docker, container: &ManagedContainer) -> Option<Upda
 
 #[cfg(test)]
 mod tests;
-
-/// Extracts the manifest digest from the locally stored image metadata.
-/// Returns `None` if the image has no repo digest (e.g. locally built images).
-async fn get_local_digest(docker: &Docker, image: &str) -> Option<String> {
-    let info = docker
-        .inspect_image(image)
-        .await
-        .map_err(|e| tracing::warn!("Could not inspect local image {image}: {e:#}"))
-        .ok()?;
-
-    info.repo_digests?
-        .into_iter()
-        .find_map(|d| d.split_once('@').map(|(_, digest)| digest.to_string()))
-        .or_else(|| {
-            tracing::warn!("Image {image} has no repo digest — cannot compare (locally built?)");
-            None
-        })
-}

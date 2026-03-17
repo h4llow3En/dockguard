@@ -52,8 +52,9 @@ fn update_status_update_available_carries_digests() {
     let s = UpdateStatus::UpdateAvailable {
         local: "sha256:old".to_string(),
         remote: "sha256:new".to_string(),
+        local_only: false,
     };
-    if let UpdateStatus::UpdateAvailable { local, remote } = s {
+    if let UpdateStatus::UpdateAvailable { local, remote, .. } = s {
         assert_eq!(local, "sha256:old");
         assert_eq!(remote, "sha256:new");
     } else {

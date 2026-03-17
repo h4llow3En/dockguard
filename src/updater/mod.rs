@@ -28,10 +28,18 @@ pub async fn perform_update(
     container: &ManagedContainer,
     pull_timeout: u64,
     clean: bool,
+    skip_pull: bool,
 ) -> Result<()> {
     let old_image_id = container.image_id.clone();
 
-    pull_image(docker, &container.image, pull_timeout).await?;
+    if skip_pull {
+        tracing::info!(
+            "Newer image for {} already available locally — skipping pull",
+            container.image
+        );
+    } else {
+        pull_image(docker, &container.image, pull_timeout).await?;
+    }
 
     let inspect = docker
         .inspect_container(&container.id, None)

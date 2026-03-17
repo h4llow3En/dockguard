@@ -104,10 +104,25 @@ pub async fn watch(
             .and_then(|n| n.first())
             .map(|s| s.trim_start_matches('/'))
             .unwrap_or("<unknown>");
-        let image = container.image.as_deref().unwrap_or("<unknown>");
         let id = container.id.as_deref().unwrap_or_default();
         let image_id = container.image_id.as_deref().unwrap_or_default();
         let label_map = container.labels.as_ref().unwrap_or(&empty);
+
+        // list_containers returns the sha256 image ID when the tag has been
+        // repointed (e.g. a newer version of was already pulled). Fall back
+        // to inspecting the container to recover the original image reference.
+        let list_image = container.image.as_deref().unwrap_or("<unknown>");
+        let inspected_image;
+        let image = if list_image.starts_with("sha256:") {
+            inspected_image = docker
+                .inspect_container(id, None)
+                .await
+                .ok()
+                .and_then(|info| info.config.and_then(|c| c.image));
+            inspected_image.as_deref().unwrap_or(list_image)
+        } else {
+            list_image
+        };
 
         let is_own = own_container_id.as_deref() == Some(id);
         let force_enable = is_own && cfg.self_update;
