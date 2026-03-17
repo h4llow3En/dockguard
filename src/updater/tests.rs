@@ -2,6 +2,78 @@ use super::*;
 use bollard::models::{ContainerState, ContainerStateStatusEnum, Health, HealthStatusEnum};
 use std::time::Duration;
 
+// --- host_platform (fallback) ---
+
+#[test]
+fn host_platform_starts_with_linux() {
+    assert!(host_platform().starts_with("linux/"));
+}
+
+#[test]
+fn host_platform_has_non_empty_arch() {
+    let p = host_platform();
+    let arch = p.strip_prefix("linux/").unwrap();
+    assert!(!arch.is_empty());
+}
+
+#[test]
+fn host_platform_known_arch_is_mapped() {
+    let p = host_platform();
+    match std::env::consts::ARCH {
+        "x86_64" => assert_eq!(p, "linux/amd64"),
+        "aarch64" => assert_eq!(p, "linux/arm64"),
+        _ => {}
+    }
+}
+
+// --- platform_from_inspect ---
+
+#[test]
+fn platform_from_inspect_os_and_arch() {
+    assert_eq!(
+        platform_from_inspect(Some("linux"), Some("amd64"), None),
+        "linux/amd64"
+    );
+}
+
+#[test]
+fn platform_from_inspect_with_variant() {
+    assert_eq!(
+        platform_from_inspect(Some("linux"), Some("arm"), Some("v7")),
+        "linux/arm/v7"
+    );
+}
+
+#[test]
+fn platform_from_inspect_empty_variant_is_ignored() {
+    assert_eq!(
+        platform_from_inspect(Some("linux"), Some("arm64"), Some("")),
+        "linux/arm64"
+    );
+}
+
+#[test]
+fn platform_from_inspect_missing_arch_falls_back_to_host() {
+    let result = platform_from_inspect(Some("linux"), None, None);
+    assert_eq!(result, host_platform());
+}
+
+#[test]
+fn platform_from_inspect_missing_os_falls_back_to_host() {
+    let result = platform_from_inspect(None, Some("amd64"), None);
+    assert_eq!(result, host_platform());
+}
+
+#[test]
+fn platform_from_inspect_x86_image_on_any_host() {
+    // Simulates an x86 image running on an ARM host via emulation.
+    // The pulled image must stay x86.
+    assert_eq!(
+        platform_from_inspect(Some("linux"), Some("amd64"), None),
+        "linux/amd64"
+    );
+}
+
 fn state(status: ContainerStateStatusEnum, health: Option<HealthStatusEnum>) -> ContainerState {
     ContainerState {
         status: Some(status),

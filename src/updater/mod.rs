@@ -309,14 +309,70 @@ async fn rollback(
     }
 }
 
-/// Pulls the given image reference, respecting the configured timeout.
+/// Assembles a Docker platform string from image inspection data.
+///
+/// Returns `{os}/{architecture}` or `{os}/{architecture}/{variant}` when the
+/// image metadata is present. Falls back to [`host_platform`] when either
+/// field is missing so we always pass *something* sensible to the registry.
+pub(crate) fn platform_from_inspect(
+    os: Option<&str>,
+    architecture: Option<&str>,
+    variant: Option<&str>,
+) -> String {
+    match (os, architecture) {
+        (Some(os), Some(arch)) => match variant.filter(|v| !v.is_empty()) {
+            Some(v) => format!("{os}/{arch}/{v}"),
+            None => format!("{os}/{arch}"),
+        },
+        _ => host_platform(),
+    }
+}
+
+/// Fallback platform derived from the compiled target architecture.
+///
+/// Used when the local image cannot be inspected (e.g. on the very first pull
+/// or if the inspect call fails unexpectedly).
+pub(crate) fn host_platform() -> String {
+    let arch = match std::env::consts::ARCH {
+        "x86_64" => "amd64",
+        "aarch64" => "arm64",
+        other => other,
+    };
+    format!("linux/{arch}")
+}
+
+/// Determines the platform of the locally stored image.
+///
+/// Prefers the image's own `os`/`architecture`/`variant` metadata so that a
+/// container running an x86 image on an ARM host (via emulation) keeps pulling
+/// the x86 variant rather than accidentally switching to the native arch.
+async fn image_platform(docker: &Docker, image: &str) -> String {
+    match docker.inspect_image(image).await {
+        Ok(info) => platform_from_inspect(
+            info.os.as_deref(),
+            info.architecture.as_deref(),
+            info.variant.as_deref(),
+        ),
+        Err(e) => {
+            tracing::warn!(
+                "Could not inspect image {image} for platform info: {e:#} — falling back to host platform"
+            );
+            host_platform()
+        }
+    }
+}
+
+/// Pulls the given image reference matching the existing image's platform,
+/// respecting the configured timeout.
 async fn pull_image(docker: &Docker, image: &str, timeout_secs: u64) -> Result<()> {
-    tracing::info!("Pulling image {image}...");
+    let platform = image_platform(docker, image).await;
+    tracing::info!("Pulling image {image} (platform: {platform})...");
 
     let mut stream = docker.create_image(
         Some(
             CreateImageOptionsBuilder::default()
                 .from_image(image)
+                .platform(&platform)
                 .build(),
         ),
         None,
