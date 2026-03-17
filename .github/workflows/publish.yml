@@ -218,6 +218,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: dockguard-*
           merge-multiple: true
 
       - name: Create release
