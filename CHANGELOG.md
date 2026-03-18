@@ -1,5 +1,12 @@
 # Changelog
 
+### [v0.1.5](https://github.com/h4llow3En/dockguard/compare/v0.1.4...v0.1.5) (2026-03-18)
+
+#### Fixes
+
+* change rwlock for selfupdate to queue to update container gradually
+([440bd22](https://github.com/h4llow3En/dockguard/commit/440bd22bb1ce801d99a0e18db73591048bf47acc))
+
 ### [v0.1.4](https://github.com/h4llow3En/dockguard/compare/v0.1.3...v0.1.4) (2026-03-17)
 
 #### Fixes
