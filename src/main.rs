@@ -13,10 +13,10 @@ use config::{Config, ValidatedConfig};
 use std::collections::HashMap;
 use std::io::Read;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
-use watcher::UpdateGate;
 
 #[tokio::main]
 async fn main() {
@@ -67,7 +67,10 @@ async fn run(cfg: Arc<ValidatedConfig>) -> Result<()> {
     let docker_watch = docker.clone();
     let cfg_watch = Arc::clone(&cfg);
     let managed_watch = Arc::clone(&managed);
-    let gate: UpdateGate = Arc::new(RwLock::new(()));
+
+    let (tx, rx) = tokio::sync::mpsc::channel(64);
+    let self_update_pending = Arc::new(AtomicBool::new(false));
+    tokio::spawn(scheduler::update_worker(rx));
 
     let own_container_id: Option<String> = if cfg.self_update {
         match self_container::resolve_own_container(&docker).await {
@@ -119,7 +122,8 @@ async fn run(cfg: Arc<ValidatedConfig>) -> Result<()> {
             cfg_watch,
             managed_watch,
             own_container_id,
-            gate,
+            tx,
+            self_update_pending,
         )
         .await
         {

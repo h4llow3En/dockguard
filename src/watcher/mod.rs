@@ -1,6 +1,6 @@
 use crate::config::ValidatedConfig;
 use crate::labels::{ContainerLabels, ResolvedContainerConfig};
-use crate::scheduler;
+use crate::scheduler::{self, SelfUpdatePending, UpdateSender};
 use anyhow::Result;
 use bollard::Docker;
 use bollard::query_parameters::{EventsOptions, ListContainersOptions};
@@ -21,13 +21,6 @@ pub struct ManagedContainer {
 }
 
 pub type ManagedContainers = Arc<RwLock<HashMap<String, ManagedContainer>>>;
-
-/// Shared gate that serialises self-updates against all other container updates.
-///
-/// - Regular updates acquire a **read** guard (many can run in parallel).
-/// - Self-updates acquire the **write** guard (exclusive: waits for all running
-///   updates to finish, then prevents new ones from starting).
-pub type UpdateGate = Arc<RwLock<()>>;
 
 /// Try building `ManagedContainer` from container metadata.
 /// Returns `None` if the container should not be managed
@@ -77,7 +70,8 @@ pub async fn watch(
     cfg: Arc<ValidatedConfig>,
     managed: ManagedContainers,
     own_container_id: Option<String>,
-    gate: UpdateGate,
+    tx: UpdateSender,
+    self_update_pending: SelfUpdatePending,
 ) -> Result<()> {
     let mut event_stream = docker.events(Some(EventsOptions {
         filters: Some(HashMap::from([(
@@ -148,8 +142,9 @@ pub async fn watch(
                     docker.clone(),
                     mc.clone(),
                     Arc::clone(&cfg),
-                    Arc::clone(&gate),
+                    tx.clone(),
                     force_enable,
+                    Arc::clone(&self_update_pending),
                 ));
                 managed.write().await.insert(mc.id.clone(), mc);
             }
@@ -204,8 +199,9 @@ pub async fn watch(
                                     docker.clone(),
                                     mc.clone(),
                                     Arc::clone(&cfg),
-                                    Arc::clone(&gate),
+                                    tx.clone(),
                                     false,
+                                    Arc::clone(&self_update_pending),
                                 ));
                                 managed.write().await.insert(mc.id.clone(), mc);
                             } else {

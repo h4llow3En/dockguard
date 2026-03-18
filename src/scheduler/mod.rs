@@ -1,13 +1,15 @@
 use crate::config::ValidatedConfig;
 use crate::labels::UpdateTrigger;
 use crate::updater::perform_update;
-use crate::watcher::{ManagedContainer, UpdateGate};
+use crate::watcher::ManagedContainer;
 use bollard::Docker;
 use chrono::Utc;
 use cron::Schedule;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+use tokio::sync::mpsc;
 
 pub enum UpdateStatus {
     UpToDate,
@@ -18,12 +20,29 @@ pub enum UpdateStatus {
     },
 }
 
+/// A job to be processed by the [`update_worker`].
+pub struct UpdateJob {
+    pub docker: Docker,
+    pub container: ManagedContainer,
+    pub pull_timeout: u64,
+    pub clean: bool,
+}
+
+pub type UpdateSender = mpsc::Sender<UpdateJob>;
+
+/// Flag set when a self-update has been queued.
+///
+/// Once set, schedulers stop queuing new jobs. Already-queued jobs are still
+/// processed before the self-update runs.
+pub type SelfUpdatePending = Arc<AtomicBool>;
+
 pub async fn run(
     docker: Docker,
     container: ManagedContainer,
     cfg: Arc<ValidatedConfig>,
-    gate: UpdateGate,
+    tx: UpdateSender,
     is_self: bool,
+    self_update_pending: SelfUpdatePending,
 ) {
     tracing::debug!("Scheduler started for container {}", container.name);
     loop {
@@ -33,47 +52,95 @@ pub async fn run(
                 break;
             }
             _ = trigger_wait(&container.config.update_trigger) => {
-                tracing::debug!("Checking for updates for container {} (image: {})", container.name, container.image);
-                match check(&docker, &container).await {
-                    Some(UpdateStatus::UpdateAvailable { local, remote, local_only }) => {
-                        if container.config.watch {
-                            tracing::info!(
-                                container = %container.name,
-                                image = %container.image,
-                                local = %local,
-                                remote = %remote,
-                                "Image update available"
-                            );
-                        } else {
-                            tracing::info!(
-                                container = %container.name,
-                                image = %container.image,
-                                local = %local,
-                                remote = %remote,
-                                "Image update available — triggering update"
-                            );
-                            let result = if is_self {
-                                let _guard = gate.write().await;
-                                perform_update(&docker, &container, cfg.pull_timeout, cfg.clean, local_only).await
-                            } else {
-                                let _guard = gate.read().await;
-                                perform_update(&docker, &container, cfg.pull_timeout, cfg.clean, local_only).await
-                            };
-                            if let Err(e) = result {
-                                tracing::error!("Update of container {} failed: {e:#}", container.name);
-                            }
-                        }
-                    }
-                    Some(UpdateStatus::UpToDate) => {
-                        tracing::debug!(
-                            "Container {} — image {} is up to date",
-                            container.name,
-                            container.image
-                        );
-                    }
-                    None => {} // error already logged in check
+                if self_update_pending.load(Ordering::Relaxed) {
+                    tracing::info!(
+                        "Self-update pending — stopping scheduler for {}",
+                        container.name
+                    );
+                    break;
+                }
+
+                if is_self {
+                    self_update_pending.store(true, Ordering::Relaxed);
+                }
+
+                let job = UpdateJob {
+                    docker: docker.clone(),
+                    container: container.clone(),
+                    pull_timeout: cfg.pull_timeout,
+                    clean: cfg.clean,
+                };
+                if tx.send(job).await.is_err() {
+                    tracing::error!(
+                        "Update queue closed — stopping scheduler for {}",
+                        container.name
+                    );
+                    break;
+                }
+
+                if is_self {
+                    tracing::info!(
+                        "Self-update queued — scheduler for {} exiting",
+                        container.name
+                    );
+                    break;
                 }
             }
+        }
+    }
+}
+
+/// Processes queued update jobs sequentially, one at a time.
+pub async fn update_worker(mut rx: mpsc::Receiver<UpdateJob>) {
+    while let Some(job) = rx.recv().await {
+        tracing::debug!(
+            "Checking for updates for container {} (image: {})",
+            job.container.name,
+            job.container.image
+        );
+        match check(&job.docker, &job.container).await {
+            Some(UpdateStatus::UpdateAvailable {
+                local,
+                remote,
+                local_only,
+            }) => {
+                if job.container.config.watch {
+                    tracing::info!(
+                        container = %job.container.name,
+                        image = %job.container.image,
+                        local = %local,
+                        remote = %remote,
+                        "Image update available"
+                    );
+                } else {
+                    tracing::info!(
+                        container = %job.container.name,
+                        image = %job.container.image,
+                        local = %local,
+                        remote = %remote,
+                        "Image update available — performing update"
+                    );
+                    if let Err(e) = perform_update(
+                        &job.docker,
+                        &job.container,
+                        job.pull_timeout,
+                        job.clean,
+                        local_only,
+                    )
+                    .await
+                    {
+                        tracing::error!("Update of container {} failed: {e:#}", job.container.name);
+                    }
+                }
+            }
+            Some(UpdateStatus::UpToDate) => {
+                tracing::debug!(
+                    "Container {} — image {} is up to date",
+                    job.container.name,
+                    job.container.image
+                );
+            }
+            None => {} // error already logged in check
         }
     }
 }
@@ -118,7 +185,7 @@ async fn trigger_wait(trigger: &UpdateTrigger) {
 /// **Registry**: if the local image is up to date, compare its manifest
 ///               digest against the registry to detect remote-only updates.
 ///
-/// Returns `None` if the check could not be completed (errors are logged).
+/// Returns `None` if the check could not be completed.
 pub async fn check(docker: &Docker, container: &ManagedContainer) -> Option<UpdateStatus> {
     let tagged_image = match docker.inspect_image(&container.image).await {
         Ok(info) => info,

@@ -1,14 +1,17 @@
 use super::*;
 use crate::config::ValidatedConfig;
 use crate::labels::{ResolvedContainerConfig, UpdateTrigger};
-use crate::watcher::UpdateGate;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time;
 use tokio_util::sync::CancellationToken;
 
-fn make_gate() -> UpdateGate {
-    Arc::new(tokio::sync::RwLock::new(()))
+fn make_tx() -> UpdateSender {
+    tokio::sync::mpsc::channel(64).0
+}
+
+fn make_self_update_pending() -> SelfUpdatePending {
+    Arc::new(AtomicBool::new(false))
 }
 
 fn make_cfg() -> Arc<ValidatedConfig> {
@@ -108,7 +111,15 @@ async fn run_exits_when_token_pre_cancelled() {
     let container = make_container(UpdateTrigger::Interval(86400));
     container.cancel_token.cancel();
     // Should return immediately without sleeping the full interval
-    run(docker, container, make_cfg(), make_gate(), false).await;
+    run(
+        docker,
+        container,
+        make_cfg(),
+        make_tx(),
+        false,
+        make_self_update_pending(),
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -118,9 +129,37 @@ async fn run_exits_when_token_cancelled_after_spawn() {
     let container = make_container(UpdateTrigger::Interval(86400));
     let token = container.cancel_token.clone();
 
-    let handle = tokio::spawn(run(docker, container, make_cfg(), make_gate(), false));
+    let handle = tokio::spawn(run(
+        docker,
+        container,
+        make_cfg(),
+        make_tx(),
+        false,
+        make_self_update_pending(),
+    ));
     token.cancel();
     // Yield to the runtime so the spawned task can poll and see the cancellation
     time::advance(Duration::from_millis(1)).await;
+    handle.await.unwrap();
+}
+
+#[tokio::test]
+async fn run_exits_when_self_update_pending() {
+    time::pause();
+    let docker = bollard::Docker::connect_with_local_defaults().unwrap();
+    let container = make_container(UpdateTrigger::Interval(1));
+    let pending = make_self_update_pending();
+    pending.store(true, Ordering::Relaxed);
+
+    let handle = tokio::spawn(run(
+        docker,
+        container,
+        make_cfg(),
+        make_tx(),
+        false,
+        pending,
+    ));
+    // Advance past the 1s interval so trigger fires and sees the flag
+    time::advance(Duration::from_secs(2)).await;
     handle.await.unwrap();
 }
