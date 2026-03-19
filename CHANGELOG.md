@@ -1,5 +1,12 @@
 # Changelog
 
+### [v0.1.6](https://github.com/h4llow3En/dockguard/compare/v0.1.5...v0.1.6) (2026-03-19)
+
+#### Fixes
+
+* add platform independent docker pull if platform specific fails
+([3c78d97](https://github.com/h4llow3En/dockguard/commit/3c78d97b978193170336c00ab11ba758eb22e2c6))
+
 ### [v0.1.5](https://github.com/h4llow3En/dockguard/compare/v0.1.4...v0.1.5) (2026-03-18)
 
 #### Fixes
