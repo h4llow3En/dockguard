@@ -372,20 +372,39 @@ async fn image_platform(docker: &Docker, image: &str) -> String {
 
 /// Pulls the given image reference matching the existing image's platform,
 /// respecting the configured timeout.
+///
+/// If the pull with an explicit platform fails, retries without a platform
+/// constraint to let the Docker daemon resolve it
 async fn pull_image(docker: &Docker, image: &str, timeout_secs: u64) -> Result<()> {
     let platform = image_platform(docker, image).await;
     tracing::info!("Pulling image {image} (platform: {platform})...");
 
-    let mut stream = docker.create_image(
-        Some(
-            CreateImageOptionsBuilder::default()
-                .from_image(image)
-                .platform(&platform)
-                .build(),
-        ),
-        None,
-        None,
-    );
+    match do_pull(docker, image, Some(&platform), timeout_secs).await {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            tracing::warn!(
+                "Platform-specific pull for {image} ({platform}) failed: {e:#} \
+                 — retrying without explicit platform"
+            );
+            do_pull(docker, image, None, timeout_secs).await
+        }
+    }
+}
+
+/// Executes the actual image pull, optionally constraining to a platform.
+async fn do_pull(
+    docker: &Docker,
+    image: &str,
+    platform: Option<&str>,
+    timeout_secs: u64,
+) -> Result<()> {
+    let mut opts = CreateImageOptionsBuilder::default();
+    opts = opts.from_image(image);
+    if let Some(p) = platform {
+        opts = opts.platform(p);
+    }
+
+    let mut stream = docker.create_image(Some(opts.build()), None, None);
 
     tokio::time::timeout(Duration::from_secs(timeout_secs), async {
         while let Some(result) = stream.next().await {
